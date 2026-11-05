@@ -26,6 +26,10 @@ test('main', () => {
 	assert.equal(slugify('FOOBar'), 'foo-bar');
 });
 
+test('whitespace-only string', () => {
+	assert.equal(slugify(' \t\n  '), '');
+});
+
 test('decamelize acronyms', () => {
 	assert.equal(slugify('APISection'), 'api-section');
 	// The word after the acronym has `s` as its second letter, which used to prevent the split.
