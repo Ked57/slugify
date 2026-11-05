@@ -32,6 +32,29 @@ const removeCounterSuffix = string => {
 	return parts.join('-');
 };
 
+// Hard-cap a slug so it never exceeds `maxLength` characters, cutting at a separator boundary so words are kept whole, with no trailing separator. If the first word alone is longer than `maxLength`, cut that word.
+const applyMaxLength = (string, maxLength, separator) => {
+	if (string.length <= maxLength) {
+		return string;
+	}
+
+	if (separator) {
+		// Find the longest prefix ending at a word boundary with length ≤ maxLength
+		let index = string.indexOf(separator);
+		while (index !== -1 && index <= maxLength) {
+			const next = string.indexOf(separator, index + separator.length);
+			if (next === -1 || next > maxLength) {
+				return string.slice(0, index);
+			}
+
+			index = next;
+		}
+	}
+
+	// The first word alone is longer than `maxLength`
+	return string.slice(0, maxLength);
+};
+
 const buildPatternSlug = options => {
 	let negationSetPattern = String.raw`a-z\d`;
 	negationSetPattern += options.lowercase ? '' : 'A-Z';
@@ -124,6 +147,11 @@ export default function slugify(string, options) {
 
 	if (shouldAppendDash) {
 		string += '-';
+	}
+
+	// `maxLength` caps the final result, so it applies last
+	if (options.maxLength !== undefined) {
+		string = applyMaxLength(string, options.maxLength, options.separator);
 	}
 
 	return string;

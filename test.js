@@ -126,6 +126,41 @@ test('custom separator', () => {
 	assert.equal(slugify(String.raw`foo\bar`), 'foo-bar');
 });
 
+test('maxLength', () => {
+	// Cut at a separator boundary, keeping whole words, with no trailing separator
+	assert.equal(slugify('foo bar baz', {maxLength: 7}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 6}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 3}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 8}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 11}), 'foo-bar-baz');
+
+	// The first word alone is longer than maxLength, so it is cut
+	assert.equal(slugify('foo bar', {maxLength: 2}), 'fo');
+	assert.equal(slugify('supercalifragilisticexpialidocious', {maxLength: 10}), 'supercalif');
+	assert.equal(slugify('supercalifragilisticexpialidocious', {maxLength: 8}), 'supercal');
+
+	// Custom separator
+	assert.equal(slugify('foo bar baz', {separator: '::', maxLength: 8}), 'foo::bar');
+	assert.equal(slugify('foo bar baz', {separator: '::', maxLength: 7}), 'foo');
+	assert.equal(slugify('foo bar baz', {separator: '::', maxLength: 3}), 'foo');
+	assert.equal(slugify('foo bar baz', {separator: '::', maxLength: 2}), 'fo');
+	assert.equal(slugify('foo bar', {separator: '', maxLength: 5}), 'fooba');
+
+	// Works with the other options
+	assert.equal(slugify('SUPERCALIFRAGILISTICEXPIALIDOUNS', {lowercase: false, maxLength: 12}), 'SUPERCALIFRA');
+	assert.equal(slugify('Don\'t! stop', {separator: '_', maxLength: 9}), 'dont_stop');
+	assert.equal(slugify('Don\'t! stop', {separator: '_', maxLength: 6}), 'dont');
+	assert.equal(slugify('Déjà Vu', {transliterate: false, maxLength: 7}), 'déjà-vu');
+	assert.equal(slugify('Déjà Vu', {transliterate: false, maxLength: 5}), 'déjà');
+	assert.equal(slugify('Déjà Vu', {transliterate: false, maxLength: 3}), 'déj');
+	assert.equal(slugify('foo bar-', {preserveTrailingDash: true, maxLength: 8}), 'foo-bar-');
+	assert.equal(slugify('foo bar-', {preserveTrailingDash: true, maxLength: 7}), 'foo-bar');
+	assert.equal(slugify('_foo_bar', {preserveLeadingUnderscore: true, maxLength: 5}), '_foo');
+	assert.equal(slugify('_foo_bar', {preserveLeadingUnderscore: true, maxLength: 3}), '_fo');
+	assert.equal(slugify('', {maxLength: 5}), '');
+	assert.equal(slugify('', {maxLength: 0}), '');
+});
+
 test('options set to `undefined` use the defaults', () => {
 	assert.equal(slugify('Déjà Vu fooBar', {
 		separator: undefined,
@@ -136,6 +171,7 @@ test('options set to `undefined` use the defaults', () => {
 		preserveTrailingDash: undefined,
 		preserveCharacters: undefined,
 		transliterate: undefined,
+		maxLength: undefined,
 		locale: undefined,
 	}), 'deja-vu-foo-bar');
 });
