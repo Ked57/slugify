@@ -247,6 +247,36 @@ slugify('Déjà Vu', {transliterate: false});
 //=> 'déjà-vu'
 ```
 
+##### maxLength
+
+Type: `number`\
+Default: `undefined`
+
+The maximum length of the slug.
+
+The slug is shortened at a separator boundary so words stay whole, and never ends with a separator. If the first word alone is longer than `maxLength`, that word is cut.
+
+The length is measured in UTF-16 code units, like `string.length`. A character is never split in half.
+
+A preserved leading underscore or trailing dash counts toward the limit. The trailing dash is dropped when the slug is shortened or there is no room for it.
+
+With [`slugifyWithCounter()`](#slugifywithcounter), the slug is shortened further to make room for the counter suffix. At least one character of the slug is kept, so a `maxLength` too small for one character plus the suffix is exceeded.
+
+Must be a non-negative integer.
+
+```js
+import slugify from '@sindresorhus/slugify';
+
+slugify('Hello, World! How are you?', {maxLength: 15});
+//=> 'hello-world-how'
+
+slugify('Hello, World! How are you?', {maxLength: 15, separator: '_'});
+//=> 'hello_world_how'
+
+slugify('supercalifragilistic word', {maxLength: 5});
+//=> 'super'
+```
+
 ### slugifyWithCounter()
 
 Returns a new instance of `slugify(string, options?)` with a counter to handle multiple occurrences of the same string.

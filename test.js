@@ -424,3 +424,90 @@ test('slugifyWithCounter() is not vulnerable to ReDoS', () => {
 
 	assert.ok(duration < 5000, `Took ${duration.toFixed(0)}ms`);
 });
+
+test('maxLength option', () => {
+	// Cuts at a separator boundary so words stay whole, with no trailing separator.
+	assert.equal(slugify('foo bar baz', {maxLength: 11}), 'foo-bar-baz');
+	assert.equal(slugify('foo bar baz', {maxLength: 100}), 'foo-bar-baz');
+	assert.equal(slugify('foo bar baz', {maxLength: 10}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 8}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 7}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 6}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 3}), 'foo');
+	assert.equal(slugify('Hello, World! How are you?', {maxLength: 15}), 'hello-world-how');
+
+	// The first word alone is longer than `maxLength`, so it is cut.
+	assert.equal(slugify('supercalifragilistic word', {maxLength: 5}), 'super');
+	assert.equal(slugify('foo bar', {maxLength: 2}), 'fo');
+	assert.equal(slugify('foo bar', {maxLength: 0}), '');
+	assert.equal(slugify('', {maxLength: 5}), '');
+
+	// `undefined` uses the default of no limit.
+	assert.equal(slugify('foo bar baz', {maxLength: undefined}), 'foo-bar-baz');
+});
+
+test('maxLength option with a custom separator', () => {
+	assert.equal(slugify('foo bar baz', {maxLength: 9, separator: '_'}), 'foo_bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 9, separator: '__'}), 'foo__bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 7, separator: '__'}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 8, separator: '$$'}), 'foo$$bar');
+	assert.equal(slugify('foobar baz', {maxLength: 4, separator: '__'}), 'foob');
+
+	// Without a separator there are no word boundaries, so the slug is cut.
+	assert.equal(slugify('foo bar baz', {maxLength: 5, separator: ''}), 'fooba');
+});
+
+test('maxLength option with other options', () => {
+	assert.equal(slugify('Foo Bar Baz', {maxLength: 7, lowercase: false}), 'Foo-Bar');
+	assert.equal(slugify('fooBarBaz', {maxLength: 7}), 'foo-bar');
+	assert.equal(slugify('fooBarBaz', {maxLength: 7, decamelize: false}), 'foobarb');
+	assert.equal(slugify('Foo & Bar', {maxLength: 8}), 'foo-and');
+	assert.equal(slugify('foo@bar baz', {maxLength: 10, customReplacements: [['@', ' at ']]}), 'foo-at-bar');
+	assert.equal(slugify('foo#bar baz', {maxLength: 9, preserveCharacters: ['#']}), 'foo#bar');
+	assert.equal(slugify('Räksmörgås smörgås', {maxLength: 12, locale: 'sv'}), 'raksmorgas');
+	assert.equal(slugify('Déjà Vu encore', {maxLength: 7, transliterate: false}), 'déjà-vu');
+
+	// The leading underscore counts toward the limit.
+	assert.equal(slugify('_foo bar', {maxLength: 8, preserveLeadingUnderscore: true}), '_foo-bar');
+	assert.equal(slugify('_foo bar', {maxLength: 7, preserveLeadingUnderscore: true}), '_foo');
+	assert.equal(slugify('_foobar', {maxLength: 3, preserveLeadingUnderscore: true}), '_fo');
+	assert.equal(slugify('_foo', {maxLength: 1, preserveLeadingUnderscore: true}), '_');
+	assert.equal(slugify('_foo', {maxLength: 0, preserveLeadingUnderscore: true}), '');
+
+	// The trailing dash counts toward the limit, and is dropped when the slug is shortened.
+	assert.equal(slugify('foo bar-', {maxLength: 8, preserveTrailingDash: true}), 'foo-bar-');
+	assert.equal(slugify('foo bar-', {maxLength: 7, preserveTrailingDash: true}), 'foo-bar');
+	assert.equal(slugify('foo bar baz-', {maxLength: 9, preserveTrailingDash: true}), 'foo-bar');
+});
+
+test('maxLength option does not split characters', () => {
+	// A surrogate pair is not split.
+	assert.equal(slugify('𝒜𝒜𝒜', {maxLength: 3, transliterate: false}), '𝒜');
+	// A combining mark is not separated from its base character.
+	assert.equal(slugify('cafe\u{301}s', {maxLength: 4, transliterate: false}), 'caf');
+	assert.equal(slugify('cafe\u{301}s', {maxLength: 5, transliterate: false}), 'cafe\u{301}');
+});
+
+test('maxLength option validation', () => {
+	assert.throws(() => slugify('foo', {maxLength: -1}), {name: 'TypeError'});
+	assert.throws(() => slugify('foo', {maxLength: 1.5}), {name: 'TypeError'});
+	assert.throws(() => slugify('foo', {maxLength: NaN}), {name: 'TypeError'});
+	assert.throws(() => slugify('foo', {maxLength: Infinity}), {name: 'TypeError'});
+	assert.throws(() => slugify('foo', {maxLength: '5'}), {name: 'TypeError'});
+	assert.throws(() => slugify('foo', {maxLength: null}), {name: 'TypeError'});
+});
+
+test('slugifyWithCounter() keeps the counter within maxLength', () => {
+	const countingSlugify = slugifyWithCounter();
+	assert.equal(countingSlugify('foo bar', {maxLength: 7}), 'foo-bar');
+	assert.equal(countingSlugify('foo bar', {maxLength: 7}), 'foo-2');
+	assert.equal(countingSlugify('foo bar', {maxLength: 7}), 'foo-3');
+	assert.equal(countingSlugify('foobarbaz', {maxLength: 7}), 'foobarb');
+	assert.equal(countingSlugify('foobarbaz', {maxLength: 7}), 'fooba-2');
+	assert.equal(countingSlugify('foo bar', {maxLength: 9}), 'foo-bar-4');
+
+	const separatorSlugify = slugifyWithCounter();
+	assert.equal(separatorSlugify('foo bar baz', {maxLength: 9, separator: '_'}), 'foo_bar');
+	assert.equal(separatorSlugify('foo bar baz', {maxLength: 9, separator: '_'}), 'foo_bar-2');
+	assert.equal(separatorSlugify('foo bar baz', {maxLength: 8, separator: '_'}), 'foo-3');
+});

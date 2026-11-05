@@ -32,6 +32,53 @@ const removeCounterSuffix = string => {
 	return parts.join('-');
 };
 
+// Shorten a slug to at most `maxLength` UTF-16 code units, dropping whole words from the end. Only when the first word alone is too long is a word cut, and then on a grapheme boundary so no surrogate pair or combining mark is split.
+const truncate = (string, maxLength, separator) => {
+	if (string.length <= maxLength) {
+		return string;
+	}
+
+	if (separator) {
+		const [firstWord, ...words] = string.split(separator);
+
+		if (firstWord.length <= maxLength) {
+			let result = firstWord;
+
+			for (const word of words) {
+				const candidate = `${result}${separator}${word}`;
+
+				if (candidate.length > maxLength) {
+					break;
+				}
+
+				result = candidate;
+			}
+
+			if (result) {
+				return result;
+			}
+		}
+	}
+
+	let result = '';
+
+	for (const {segment} of new Intl.Segmenter().segment(string)) {
+		if (result.length + segment.length > maxLength) {
+			break;
+		}
+
+		result += segment;
+	}
+
+	return result;
+};
+
+const validateMaxLength = maxLength => {
+	if (maxLength !== undefined && !(Number.isSafeInteger(maxLength) && maxLength >= 0)) {
+		throw new TypeError(`Expected \`maxLength\` to be a non-negative integer, got \`${maxLength}\``);
+	}
+};
+
 const buildPatternSlug = options => {
 	let negationSetPattern = String.raw`a-z\d`;
 	negationSetPattern += options.lowercase ? '' : 'A-Z';
@@ -74,8 +121,10 @@ export default function slugify(string, options) {
 		...Object.fromEntries(Object.entries(options ?? {}).filter(([, value]) => value !== undefined)),
 	};
 
-	const shouldPrependUnderscore = options.preserveLeadingUnderscore && string.startsWith('_');
-	const shouldAppendDash = options.preserveTrailingDash && string.endsWith('-');
+	validateMaxLength(options.maxLength);
+
+	let shouldPrependUnderscore = options.preserveLeadingUnderscore && string.startsWith('_');
+	let shouldAppendDash = options.preserveTrailingDash && string.endsWith('-');
 
 	if (options.transliterate) {
 		const customReplacements = new Map([
@@ -118,6 +167,15 @@ export default function slugify(string, options) {
 		string = removeMootSeparators(string, options.separator);
 	}
 
+	if (options.maxLength !== undefined) {
+		// The preserved leading underscore and trailing dash count toward the limit. The trailing dash is dropped when the slug is shortened or there is no room left for it, as the slug then no longer ends where the input did.
+		shouldPrependUnderscore &&= options.maxLength > 0;
+		const available = options.maxLength - (shouldPrependUnderscore ? 1 : 0);
+		const truncated = truncate(string, available, options.separator);
+		shouldAppendDash &&= truncated === string && string.length < available;
+		string = truncated;
+	}
+
 	if (shouldPrependUnderscore) {
 		string = `_${string}`;
 	}
@@ -145,13 +203,25 @@ export function slugifyWithCounter() {
 		const counter = occurrences.get(stringLower);
 		occurrences.set(stringLower, typeof counter === 'number' ? counter + 1 : 1);
 		let newCounter = occurrences.get(stringLower) || 2;
-		let result = newCounter >= 2 || numberless > 2 ? `${string}-${newCounter}` : string;
+
+		// Shorten the slug to make room for the counter suffix, so the result still respects `maxLength`. At least one character of the slug is always kept.
+		const withCounter = counterValue => {
+			const suffix = `-${counterValue}`;
+
+			const base = options?.maxLength === undefined
+				? string
+				: truncate(string, Math.max(options.maxLength - suffix.length, 1), options.separator ?? '-');
+
+			return `${base}${suffix}`;
+		};
+
+		let result = newCounter >= 2 || numberless > 2 ? withCounter(newCounter) : string;
 
 		// The counter is keyed on the incoming slug, so it cannot see a slug that was previously handed out by appending a counter to a *different* input. Without this loop, `foo`, `foo`, `foo 2` would return `foo-2` twice. Keep bumping the counter until the result is one that has not been returned before.
 		while (returned.has(result.toLowerCase())) {
 			newCounter += 1;
 			occurrences.set(stringLower, newCounter);
-			result = `${string}-${newCounter}`;
+			result = withCounter(newCounter);
 		}
 
 		returned.add(result.toLowerCase());
