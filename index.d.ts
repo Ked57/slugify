@@ -134,6 +134,28 @@ export type Options = {
 	readonly preserveTrailingDash?: boolean;
 
 	/**
+	Maximum length of the slug. The result never exceeds it.
+
+	The slug is cut at a `separator` boundary so words stay whole and it never ends with a separator. If the first word alone is longer than `maxLength`, that word is cut. A preserved leading underscore counts toward the length, and a preserved trailing dash is dropped if the slug had to be cut.
+
+	With `slugifyWithCounter`, the counter suffix is appended after the cut and is not counted.
+
+	@default Infinity
+
+	@example
+	```
+	import slugify from '@sindresorhus/slugify';
+
+	slugify('foo bar baz', {maxLength: 9});
+	//=> 'foo-bar'
+
+	slugify('foobarbaz', {maxLength: 4});
+	//=> 'foob'
+	```
+	*/
+	readonly maxLength?: number;
+
+	/**
 	Preserve certain characters.
 
 	It cannot contain the `separator`.

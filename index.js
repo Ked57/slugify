@@ -32,6 +32,30 @@ const removeCounterSuffix = string => {
 	return parts.join('-');
 };
 
+// Cut at the last separator boundary that fits, so words stay whole. Only a first word that is itself too long is cut mid-word.
+const truncateSlug = (string, separator, maxLength) => {
+	if (string.length <= maxLength) {
+		return string;
+	}
+
+	// The last separator starting at or before `maxLength` ends a word that fits.
+	const boundary = separator ? string.lastIndexOf(separator, maxLength) : -1;
+	let cut = string.slice(0, boundary > 0 ? boundary : maxLength);
+
+	if (boundary <= 0 && /[\u{D800}-\u{DBFF}]$/v.test(cut)) {
+		// Do not leave half of a surrogate pair behind.
+		cut = cut.slice(0, -1);
+	}
+
+	if (separator) {
+		while (cut.endsWith(separator)) {
+			cut = cut.slice(0, -separator.length);
+		}
+	}
+
+	return cut;
+};
+
 const buildPatternSlug = options => {
 	let negationSetPattern = String.raw`a-z\d`;
 	negationSetPattern += options.lowercase ? '' : 'A-Z';
@@ -70,9 +94,14 @@ export default function slugify(string, options) {
 		preserveTrailingDash: false,
 		preserveCharacters: [],
 		transliterate: true,
+		maxLength: Infinity,
 		// An option set to `undefined` uses the default.
 		...Object.fromEntries(Object.entries(options ?? {}).filter(([, value]) => value !== undefined)),
 	};
+
+	if (options.maxLength !== Infinity && !(Number.isSafeInteger(options.maxLength) && options.maxLength >= 0)) {
+		throw new TypeError(`Expected \`maxLength\` to be a non-negative integer, got \`${options.maxLength}\``);
+	}
 
 	const shouldPrependUnderscore = options.preserveLeadingUnderscore && string.startsWith('_');
 	const shouldAppendDash = options.preserveTrailingDash && string.endsWith('-');
@@ -118,15 +147,15 @@ export default function slugify(string, options) {
 		string = removeMootSeparators(string, options.separator);
 	}
 
-	if (shouldPrependUnderscore) {
-		string = `_${string}`;
+	const prefix = shouldPrependUnderscore ? '_' : '';
+	// The preserved trailing dash is only kept when nothing had to be cut, as the result must never end in a cut-off separator.
+	const suffix = shouldAppendDash ? '-' : '';
+
+	if (prefix.length + string.length + suffix.length <= options.maxLength) {
+		return prefix + string + suffix;
 	}
 
-	if (shouldAppendDash) {
-		string += '-';
-	}
-
-	return string;
+	return options.maxLength === 0 ? '' : prefix + truncateSlug(string, options.separator, options.maxLength - prefix.length);
 }
 
 export function slugifyWithCounter() {

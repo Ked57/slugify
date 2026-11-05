@@ -424,3 +424,62 @@ test('slugifyWithCounter() is not vulnerable to ReDoS', () => {
 
 	assert.ok(duration < 5000, `Took ${duration.toFixed(0)}ms`);
 });
+
+test('maxLength', () => {
+	assert.equal(slugify('foo bar baz', {maxLength: 9}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 11}), 'foo-bar-baz');
+	assert.equal(slugify('foo bar baz', {maxLength: 7}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 8}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 3}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 2}), 'fo');
+	assert.equal(slugify('foobarbaz qux', {maxLength: 4}), 'foob');
+	assert.equal(slugify('foo bar baz', {maxLength: 0}), '');
+	assert.equal(slugify('foo bar', {maxLength: Infinity}), 'foo-bar');
+	assert.equal(slugify('foo bar baz', {maxLength: undefined}), 'foo-bar-baz');
+	assert.throws(() => slugify('foo', {maxLength: -1}), TypeError);
+	assert.throws(() => slugify('foo', {maxLength: 1.5}), TypeError);
+});
+
+test('maxLength with custom separator', () => {
+	assert.equal(slugify('foo bar baz', {maxLength: 9, separator: '_'}), 'foo_bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 10, separator: '--'}), 'foo--bar');
+	assert.equal(slugify('foo bar baz', {maxLength: 8, separator: '--'}), 'foo--bar'.slice(0, 8));
+	assert.equal(slugify('foo bar baz', {maxLength: 4, separator: '--'}), 'foo');
+	assert.equal(slugify('foo bar baz', {maxLength: 5, separator: ''}), 'foobar'.slice(0, 5));
+	assert.equal(slugify('foo bar baz', {maxLength: 5, separator: '$&'}), 'foo');
+});
+
+test('maxLength with other options', () => {
+	assert.equal(slugify('Foo Bar Baz', {maxLength: 9, lowercase: false}), 'Foo-Bar');
+	assert.equal(slugify('fooBarBaz', {maxLength: 8}), 'foo-bar');
+	assert.equal(slugify('fooBarBaz', {maxLength: 8, decamelize: false}), 'foobarba');
+	assert.equal(slugify('foo & bar', {maxLength: 7}), 'foo-and');
+	assert.equal(slugify('foo @ bar', {maxLength: 6, customReplacements: [['@', 'at']]}), 'foo-at');
+	assert.equal(slugify('_foo bar baz', {maxLength: 9, preserveLeadingUnderscore: true}), '_foo-bar');
+	assert.equal(slugify('_foobar', {maxLength: 4, preserveLeadingUnderscore: true}), '_foo');
+	assert.equal(slugify('foo bar-', {maxLength: 8, preserveTrailingDash: true}), 'foo-bar-');
+	assert.equal(slugify('foo bar baz-', {maxLength: 8, preserveTrailingDash: true}), 'foo-bar');
+	assert.equal(slugify('foo#bar baz', {maxLength: 8, preserveCharacters: ['#']}), 'foo#bar');
+	assert.equal(slugify('Déjà vu éclair', {maxLength: 10, transliterate: false}), 'déjà-vu');
+	assert.equal(slugify('𝒜𝒜𝒜', {maxLength: 3, transliterate: false}).length <= 3, true);
+});
+
+test('maxLength never exceeded', () => {
+	const input = 'The quick brown fox -- jumps over the lazy dog & more_stuff';
+	const violations = [];
+	for (const separator of ['-', '_', '--', '']) {
+		for (let maxLength = 0; maxLength < 70; maxLength++) {
+			const result = slugify(input, {
+				maxLength,
+				separator,
+				preserveLeadingUnderscore: true,
+				preserveTrailingDash: true,
+			});
+			if (result.length > maxLength || (separator !== '' && result.endsWith(separator))) {
+				violations.push({separator, maxLength, result});
+			}
+		}
+	}
+
+	assert.deepEqual(violations, []);
+});
